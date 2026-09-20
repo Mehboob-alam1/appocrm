@@ -1,0 +1,5 @@
+date,channel,group_or_source,contact_label,role,interview_type,pain_level,tags,waitlist_yes,key_quote,notes
+# hypothesis: "I am validating Appomatrix for: [PROFESSION] in [CITY] — update go-no-go.md when locked"
+# interview_type: post_reply | dm | call | in_person
+# pain_level: high | med | low | unknown
+# waitlist_yes: yes | no | maybe
