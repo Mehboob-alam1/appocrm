@@ -6,6 +6,7 @@ class VoiceNoteService {
 
   final SpeechToText _speech;
   bool _initialized = false;
+  String _lastWords = '';
 
   Future<bool> ensureReady() async {
     final mic = await Permission.microphone.request();
@@ -19,9 +20,11 @@ class VoiceNoteService {
 
   bool get isListening => _speech.isListening;
 
+  String get lastWords => _lastWords;
+
+  /// Listen until [stopListening] — no auto-save on silence (long pause window).
   Future<void> startListening({
     required void Function(String words) onPartial,
-    required void Function(String finalText) onFinal,
     required void Function(String message) onError,
   }) async {
     final ready = await ensureReady();
@@ -30,26 +33,24 @@ class VoiceNoteService {
       return;
     }
 
-    var buffer = '';
+    _lastWords = '';
     await _speech.listen(
       onResult: (result) {
-        buffer = result.recognizedWords;
-        onPartial(buffer);
-        if (result.finalResult && buffer.trim().isNotEmpty) {
-          onFinal(buffer.trim());
-        }
+        _lastWords = result.recognizedWords;
+        onPartial(_lastWords);
       },
-      listenFor: const Duration(seconds: 60),
-      pauseFor: const Duration(seconds: 3),
+      listenFor: const Duration(minutes: 15),
+      pauseFor: const Duration(minutes: 15),
       localeId: null,
-      cancelOnError: true,
+      cancelOnError: false,
       partialResults: true,
     );
   }
 
-  Future<void> stopListening() async {
+  Future<String> stopListening() async {
     if (_speech.isListening) {
       await _speech.stop();
     }
+    return _lastWords.trim();
   }
 }

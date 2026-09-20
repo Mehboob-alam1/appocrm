@@ -1,4 +1,4 @@
-package com.example.appocrm
+package com.appomatrix.crm
 
 import io.flutter.embedding.android.FlutterActivity
 

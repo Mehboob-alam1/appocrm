@@ -1,6 +1,8 @@
 # Phase 0 status (update as you go)
 
-Last updated: **2026-09-19**
+Last updated: **2026-09-20**
+
+**Active sprint:** [SPRINT.md](./SPRINT.md) (14 days) → then [Phase 2](../phase-2/README.md)
 
 ---
 
@@ -38,10 +40,10 @@ Last updated: **2026-09-19**
 
 ## Next actions (your queue)
 
-1. **Today:** Score 2–3 niche+city pairs in [niche-selection.md](./niche-selection.md) and lock one line in [go-no-go.md](./go-no-go.md).
-2. **This week:** Join 3–5 groups using [community-discovery.md](./community-discovery.md).
-3. **Post** [outreach-templates.md](./outreach-templates.md) Post A in each group (stagger over 2–3 days).
-4. **Log** every reply in [validation-log.csv](./validation-log.csv).
+1. **Start [SPRINT.md](./SPRINT.md) Day 1** — lock niche + city in [go-no-go.md](./go-no-go.md).
+2. **Week 1:** Groups + Post A + DMs → log [validation-log.csv](./validation-log.csv).
+3. **Week 2:** Post C + **15+ waitlist** → copy numbers to [../phase-2/beta-waitlist.csv](../phase-2/beta-waitlist.csv).
+4. **GO?** → build APK ([BETA_BUILD.md](../phase-2/BETA_BUILD.md)) and WhatsApp to waitlist.
 
 ---
 

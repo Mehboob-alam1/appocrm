@@ -12,12 +12,14 @@ class ContactTile extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.trailing,
+    this.onCallTap,
   });
 
   final Contact contact;
   final VoidCallback onTap;
   final String? subtitle;
   final Widget? trailing;
+  final VoidCallback? onCallTap;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +57,14 @@ class ContactTile extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             PipelineBadge(status: contact.pipeline),
+            if (onCallTap != null) ...[
+              IconButton(
+                icon: const Icon(Icons.call_rounded),
+                color: theme.colorScheme.primary,
+                onPressed: onCallTap,
+                tooltip: 'Call',
+              ),
+            ],
             const SizedBox(width: 4),
             trailing ?? Icon(Icons.chevron_right_rounded, color: theme.colorScheme.onSurfaceVariant),
           ],

@@ -1,6 +1,7 @@
 import 'package:appocrm/data/crm_repository.dart';
 import 'package:appocrm/screens/contacts_screen.dart';
 import 'package:appocrm/screens/home_screen.dart';
+import 'package:appocrm/screens/settings_screen.dart';
 import 'package:appocrm/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
@@ -26,6 +27,7 @@ class _MainShellState extends State<MainShell> {
           children: [
             HomeScreen(repository: widget.repository),
             ContactsScreen(repository: widget.repository),
+            SettingsScreen(repository: widget.repository),
           ],
         ),
       ),
@@ -62,6 +64,11 @@ class _MainShellState extends State<MainShell> {
                   icon: Icon(Icons.people_alt_outlined),
                   selectedIcon: Icon(Icons.people_alt_rounded),
                   label: 'Contacts',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.more_horiz_rounded),
+                  selectedIcon: Icon(Icons.more_horiz),
+                  label: 'More',
                 ),
               ],
             ),

@@ -18,8 +18,24 @@ class AppDatabase {
     final path = p.join(dir, 'appomatrix_crm.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: (db, version) async {
+        await _createSchema(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(
+            'ALTER TABLE call_logs ADD COLUMN disposition TEXT',
+          );
+        }
+        if (oldVersion < 3) {
+          await _createInvoicesTable(db);
+        }
+      },
+    );
+  }
+
+  Future<void> _createSchema(Database db) async {
         await db.execute('''
           CREATE TABLE contacts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,6 +62,7 @@ class AppDatabase {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             contact_id INTEGER NOT NULL,
             created_at INTEGER NOT NULL,
+            disposition TEXT,
             FOREIGN KEY (contact_id) REFERENCES contacts (id) ON DELETE CASCADE
           )
         ''');
@@ -55,7 +72,28 @@ class AppDatabase {
         await db.execute(
           'CREATE INDEX idx_notes_contact ON notes (contact_id)',
         );
-      },
+        await _createInvoicesTable(db);
+  }
+
+  Future<void> _createInvoicesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        contact_id INTEGER NOT NULL,
+        invoice_number TEXT NOT NULL,
+        title TEXT NOT NULL,
+        amount REAL NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'INR',
+        status TEXT NOT NULL,
+        notes TEXT,
+        created_at INTEGER NOT NULL,
+        due_at INTEGER,
+        paid_at INTEGER,
+        FOREIGN KEY (contact_id) REFERENCES contacts (id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_invoices_contact ON invoices (contact_id)',
     );
   }
 }

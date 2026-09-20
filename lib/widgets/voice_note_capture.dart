@@ -12,10 +12,10 @@ class VoiceNoteCapture extends StatefulWidget {
   final Future<void> Function(String text) onSaved;
 
   @override
-  State<VoiceNoteCapture> createState() => _VoiceNoteCaptureState();
+  VoiceNoteCaptureState createState() => VoiceNoteCaptureState();
 }
 
-class _VoiceNoteCaptureState extends State<VoiceNoteCapture>
+class VoiceNoteCaptureState extends State<VoiceNoteCapture>
     with SingleTickerProviderStateMixin {
   final _voice = VoiceNoteService();
   bool _listening = false;
@@ -31,14 +31,14 @@ class _VoiceNoteCaptureState extends State<VoiceNoteCapture>
     );
   }
 
-  Future<void> _toggle() async {
-    if (_listening) {
-      await _voice.stopListening();
-      _pulse.stop();
-      setState(() => _listening = false);
-      return;
+  /// Used after-call flow to start mic without another tap.
+  Future<void> startRecordingIfIdle() async {
+    if (!_listening && mounted) {
+      await _startListening();
     }
+  }
 
+  Future<void> _startListening() async {
     setState(() {
       _listening = true;
       _partial = '';
@@ -47,16 +47,6 @@ class _VoiceNoteCaptureState extends State<VoiceNoteCapture>
 
     await _voice.startListening(
       onPartial: (words) => setState(() => _partial = words),
-      onFinal: (text) async {
-        await _voice.stopListening();
-        _pulse.stop();
-        if (!mounted) return;
-        setState(() => _listening = false);
-        await widget.onSaved(text);
-        if (mounted) {
-          setState(() => _partial = '');
-        }
-      },
       onError: (message) {
         if (!mounted) return;
         _pulse.stop();
@@ -66,6 +56,34 @@ class _VoiceNoteCaptureState extends State<VoiceNoteCapture>
         );
       },
     );
+  }
+
+  Future<void> _stopAndSave() async {
+    final text = await _voice.stopListening();
+    _pulse.stop();
+    if (!mounted) return;
+    setState(() {
+      _listening = false;
+      _partial = text;
+    });
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No speech heard — try again')),
+      );
+      return;
+    }
+    await widget.onSaved(text);
+    if (mounted) {
+      setState(() => _partial = '');
+    }
+  }
+
+  Future<void> _toggle() async {
+    if (_listening) {
+      await _stopAndSave();
+      return;
+    }
+    await _startListening();
   }
 
   @override
@@ -100,7 +118,9 @@ class _VoiceNoteCaptureState extends State<VoiceNoteCapture>
                   children: [
                     Text('Voice note', style: theme.textTheme.titleMedium),
                     Text(
-                      _listening ? 'Listening…' : 'Capture after the call',
+                      _listening
+                          ? 'Speak, then tap Stop when done'
+                          : 'Capture after the call',
                       style: theme.textTheme.bodyMedium,
                     ),
                   ],
@@ -133,7 +153,7 @@ class _VoiceNoteCaptureState extends State<VoiceNoteCapture>
                     _listening ? AppColors.accentVoice : AppColors.primary,
               ),
               icon: Icon(_listening ? Icons.stop_rounded : Icons.mic_none_rounded),
-              label: Text(_listening ? 'Stop recording' : 'Record voice note'),
+              label: Text(_listening ? 'Stop and save' : 'Record voice note'),
             ),
           ),
         ],

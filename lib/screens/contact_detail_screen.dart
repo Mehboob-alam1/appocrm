@@ -1,9 +1,17 @@
 import 'package:appocrm/data/crm_repository.dart';
 import 'package:appocrm/models/contact.dart';
+import 'package:appocrm/models/invoice.dart';
 import 'package:appocrm/models/note.dart';
+import 'package:appocrm/screens/add_invoice_screen.dart';
+import 'package:appocrm/screens/invoice_detail_sheet.dart';
+import 'package:appocrm/utils/invoice_format.dart';
+import 'package:appocrm/widgets/invoice_list_tile.dart';
+import 'package:appocrm/models/invoice_status.dart';
 import 'package:appocrm/models/pipeline_status.dart';
+import 'package:appocrm/screens/edit_contact_screen.dart';
 import 'package:appocrm/theme/app_theme.dart';
-import 'package:appocrm/utils/launchers.dart';
+import 'package:appocrm/services/outbound_call.dart';
+import 'package:appocrm/widgets/whatsapp_template_sheet.dart';
 import 'package:appocrm/widgets/app_card.dart';
 import 'package:appocrm/widgets/contact_avatar.dart';
 import 'package:appocrm/widgets/contact_tile.dart';
@@ -18,10 +26,14 @@ class ContactDetailScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.contactId,
+    this.autoStartVoiceNote = false,
+    this.focusTextNote = false,
   });
 
   final CrmRepository repository;
   final int contactId;
+  final bool autoStartVoiceNote;
+  final bool focusTextNote;
 
   @override
   State<ContactDetailScreen> createState() => _ContactDetailScreenState();
@@ -30,8 +42,13 @@ class ContactDetailScreen extends StatefulWidget {
 class _ContactDetailScreenState extends State<ContactDetailScreen> {
   Contact? _contact;
   List<Note> _notes = [];
+  List<Invoice> _invoices = [];
   int _callCount = 0;
   bool _loading = true;
+  final _manualNoteController = TextEditingController();
+  final _manualNoteFocus = FocusNode();
+  final _voiceNoteKey = GlobalKey<VoiceNoteCaptureState>();
+  bool _didRunPostCallActions = false;
 
   @override
   void initState() {
@@ -39,24 +56,113 @@ class _ContactDetailScreenState extends State<ContactDetailScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _manualNoteController.dispose();
+    _manualNoteFocus.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
     final contact = await widget.repository.getContact(widget.contactId);
     final notes = await widget.repository.getNotesForContact(widget.contactId);
+    final invoices = await widget.repository.getInvoicesForContact(widget.contactId);
     final calls = await widget.repository.getCallLogsForContact(widget.contactId);
     if (mounted) {
       setState(() {
         _contact = contact;
         _notes = notes;
+        _invoices = invoices;
         _callCount = calls.length;
         _loading = false;
       });
+      _runPostCallActionsIfNeeded();
     }
   }
+
+  void _runPostCallActionsIfNeeded() {
+    if (_didRunPostCallActions || !mounted) return;
+    _didRunPostCallActions = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (widget.autoStartVoiceNote) {
+        await _voiceNoteKey.currentState?.startRecordingIfIdle();
+      } else if (widget.focusTextNote) {
+        _manualNoteFocus.requestFocus();
+      }
+    });
+  }
+
+  Future<void> _callContact(Contact contact) async {
+    await startOutboundCall(widget.repository, contact);
+  }
+
+  Future<void> _addInvoice(Contact contact) async {
+    final added = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => AddInvoiceScreen(
+          repository: widget.repository,
+          contactId: widget.contactId,
+          contactName: contact.name,
+        ),
+      ),
+    );
+    if (added == true) await _load();
+  }
+
+  Future<void> _openInvoice(Contact contact, Invoice invoice) async {
+    await showInvoiceDetailSheet(
+      context: context,
+      repository: widget.repository,
+      contact: contact,
+      invoice: invoice,
+      onChanged: _load,
+    );
+  }
+
+  double get _invoiceTotalUnpaid => _invoices
+      .where((i) => i.status != InvoiceStatus.paid && i.status != InvoiceStatus.cancelled)
+      .fold(0, (sum, i) => sum + i.amount);
 
   Future<void> _updateContact(Contact updated) async {
     await widget.repository.updateContact(updated);
     await _load();
+  }
+
+  Future<void> _saveManualNote() async {
+    final text = _manualNoteController.text.trim();
+    final contact = _contact;
+    if (text.isEmpty || contact?.id == null) return;
+    await widget.repository.insertNote(
+      Note(
+        contactId: contact!.id!,
+        body: text,
+        fromVoice: false,
+        createdAt: DateTime.now(),
+      ),
+    );
+    _manualNoteController.clear();
+    await _load();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Note saved')),
+      );
+    }
+  }
+
+  Future<void> _editContact() async {
+    final contact = _contact;
+    if (contact == null) return;
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => EditContactScreen(
+          repository: widget.repository,
+          contact: contact,
+        ),
+      ),
+    );
+    if (saved == true) await _load();
   }
 
   Future<void> _saveVoiceNote(String text) async {
@@ -179,6 +285,10 @@ class _ContactDetailScreenState extends State<ContactDetailScreen> {
         title: const Text('Customer'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: _editContact,
+          ),
+          IconButton(
             icon: const Icon(Icons.delete_outline_rounded),
             onPressed: _deleteContact,
           ),
@@ -215,7 +325,7 @@ class _ContactDetailScreenState extends State<ContactDetailScreen> {
               QuickActionButton(
                 icon: Icons.call_rounded,
                 label: 'Call',
-                onPressed: () => launchPhoneCall(contact.phone),
+                onPressed: () => _callContact(contact),
               ),
               const SizedBox(width: 10),
               QuickActionButton(
@@ -227,7 +337,8 @@ class _ContactDetailScreenState extends State<ContactDetailScreen> {
               QuickActionButton(
                 icon: Icons.chat_rounded,
                 label: 'WhatsApp',
-                onPressed: () => launchWhatsAppChat(contact.phone),
+                onPressed: () =>
+                    openWhatsAppWithTemplatePicker(context, contact.phone),
                 highlight: true,
               ),
             ],
@@ -262,7 +373,63 @@ class _ContactDetailScreenState extends State<ContactDetailScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          VoiceNoteCapture(onSaved: _saveVoiceNote),
+          VoiceNoteCapture(key: _voiceNoteKey, onSaved: _saveVoiceNote),
+          const SizedBox(height: 14),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Quick text note', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _manualNoteController,
+                  focusNode: _manualNoteFocus,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    hintText: 'Type a note if you prefer not to use voice',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.tonal(
+                    onPressed: _saveManualNote,
+                    child: const Text('Save note'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
+          SectionHeader(
+            title: 'Invoices',
+            subtitle: _invoices.isEmpty
+                ? null
+                : _invoiceTotalUnpaid > 0
+                    ? 'Outstanding: ${formatMoney(_invoiceTotalUnpaid, 'INR')}'
+                    : '${_invoices.length} total',
+            trailing: TextButton.icon(
+              onPressed: () => _addInvoice(contact),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('New'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_invoices.isEmpty)
+            AppCard(
+              child: Text(
+                'Create an invoice for jobs, fees, or quotes you need to collect.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            )
+          else
+            ..._invoices.map(
+              (inv) => InvoiceListTile(
+                invoice: inv,
+                onTap: () => _openInvoice(contact, inv),
+              ),
+            ),
           const SizedBox(height: 22),
           SectionHeader(
             title: 'Notes',

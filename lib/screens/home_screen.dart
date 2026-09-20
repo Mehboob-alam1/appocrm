@@ -1,6 +1,7 @@
 import 'package:appocrm/data/crm_repository.dart';
 import 'package:appocrm/models/contact.dart';
 import 'package:appocrm/screens/contact_detail_screen.dart';
+import 'package:appocrm/services/outbound_call.dart';
 import 'package:appocrm/theme/app_theme.dart';
 import 'package:appocrm/widgets/app_card.dart';
 import 'package:appocrm/widgets/contact_tile.dart';
@@ -18,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<Contact> _due = [];
+  List<Contact> _queue = [];
   bool _loading = true;
 
   @override
@@ -29,12 +31,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final due = await widget.repository.getFollowUpsDue();
+    final queue = await widget.repository.getCallQueue();
     if (mounted) {
       setState(() {
         _due = due;
+        _queue = queue;
         _loading = false;
       });
     }
+  }
+
+  Future<void> _callContact(Contact contact) async {
+    await startOutboundCall(widget.repository, contact);
+    await _load();
   }
 
   Future<void> _openContact(Contact contact) async {
@@ -132,12 +141,41 @@ class _HomeScreenState extends State<HomeScreen> {
                       contact: contact,
                       subtitle: subtitle,
                       onTap: () => _openContact(contact),
+                      onCallTap: () => _callContact(contact),
                     );
                   },
                   childCount: _due.length,
                 ),
               ),
             ),
+          if (!_loading && _queue.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: SectionHeader(
+                  title: 'Call queue',
+                  subtitle: 'Work top-down like a mini dialer list',
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final contact = _queue[index];
+                    return ContactTile(
+                      contact: contact,
+                      subtitle: contact.phone,
+                      onTap: () => _openContact(contact),
+                      onCallTap: () => _callContact(contact),
+                    );
+                  },
+                  childCount: _queue.length,
+                ),
+              ),
+            ),
+          ],
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
